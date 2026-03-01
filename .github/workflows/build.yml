@@ -33,7 +33,6 @@ jobs:
           - bazzite-nvidia
           - bazzite-gnome
           - bazzite-gnome-nvidia-open
-          - bazzite-asus-nvidia-open
         tag:
           - stable
           - testing

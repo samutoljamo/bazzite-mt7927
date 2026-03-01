@@ -21,7 +21,6 @@ All images are published to `ghcr.io/samutoljamo/` with `stable` and `testing` t
 | `bazzite-nvidia-mt7927` | bazzite-nvidia | KDE | NVIDIA (proprietary) |
 | `bazzite-gnome-mt7927` | bazzite-gnome | GNOME | AMD/Intel |
 | `bazzite-gnome-nvidia-open-mt7927` | bazzite-gnome-nvidia-open | GNOME | NVIDIA (open) |
-| `bazzite-asus-nvidia-open-mt7927` | bazzite-asus-nvidia-open | KDE | NVIDIA (open, ASUS) |
 
 ## Installation
 
@@ -42,9 +41,6 @@ sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-mt7927:stable
 
 # GNOME + NVIDIA (open drivers)
 sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-nvidia-open-mt7927:stable
-
-# KDE + NVIDIA (open drivers, ASUS laptops)
-sudo bootc switch ghcr.io/samutoljamo/bazzite-asus-nvidia-open-mt7927:stable
 ```
 
 Replace `:stable` with `:testing` if you want the testing channel.
