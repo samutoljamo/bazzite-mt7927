@@ -38,11 +38,11 @@ echo "Building MT7927 modules for kernel: ${KVER}"
 ### Install build-time dependencies
 ### --------------------------------------------------------------------------
 
-dnf5 install -y \
+dnf5 install -y --skip-unavailable \
     gcc \
     make \
     "kernel-devel-${KVER}" \
-    "kernel-headers-${KVER}" \
+    kernel-headers \
     python3 \
     curl \
     libarchive \
@@ -267,13 +267,9 @@ echo "Cleaning up build artifacts..."
 rm -rf "${BUILD_DIR}"
 
 dnf5 remove -y \
-    gcc \
-    make \
     "kernel-devel-${KVER}" \
-    "kernel-headers-${KVER}" \
-    python3 \
+    kernel-headers \
     libarchive \
-    patch \
-    xz || true   # non-fatal: some may be pulled in by other image deps
+    patch || true   # non-fatal: some may be pulled in by other image deps
 
 echo "MT7927 driver build complete."
