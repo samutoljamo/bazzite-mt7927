@@ -100,7 +100,7 @@ install -m644 "${BUILD_DIR}"/bluetooth/{btusb,btmtk}.ko                         
 install -m644 "${BUILD_DIR}"/mt76/{mt76,mt76-connac-lib,mt792x-lib}.ko           "${INSTALL_DIR}/"
 install -m644 "${BUILD_DIR}"/mt76/mt7921/{mt7921-common,mt7921e}.ko              "${INSTALL_DIR}/"
 install -m644 "${BUILD_DIR}"/mt76/mt7925/{mt7925-common,mt7925e}.ko              "${INSTALL_DIR}/"
-xz -f "${INSTALL_DIR}"/*.ko
+xz --check=crc32 -f "${INSTALL_DIR}"/*.ko
 
 ### Download and stage firmware -------------------------------------------------
 

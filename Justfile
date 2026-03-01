@@ -133,6 +133,15 @@ test $target_image=image_name $tag=default_tag:
         fi
     done
 
+    # Check xz compression uses CRC32 (kernel decompressor doesn't support CRC64)
+    XZ_CHECK=$(podman run --rm "${IMAGE}" sh -c "xz --robot --list /usr/lib/modules/${KVER}/extra/mt7927/mt7925e.ko.xz" | grep -oP 'CRC\d+' | head -1 || true)
+    if [[ "${XZ_CHECK}" == "CRC32" ]]; then
+        echo "PASS: module xz compression uses CRC32"
+    else
+        echo "FAIL: module xz compression uses ${XZ_CHECK:-unknown} (kernel requires CRC32)"
+        FAIL=1
+    fi
+
     # Check firmware blobs
     for fw in \
         /usr/lib/firmware/mediatek/mt6639/BT_RAM_CODE_MT6639_2_1_hdr.bin \
@@ -190,6 +199,50 @@ test $target_image=image_name $tag=default_tag:
         echo "FAIL: modules.alias does not map PCI ID 7927 to mt7925e"
         echo "  The patched module's device table may not include the MT7927 PCI ID."
         echo "  got: ${ALIAS_ENTRY:-<empty>}"
+        FAIL=1
+    fi
+
+    # Check if kernel enforces module signatures (Secure Boot)
+    # If CONFIG_MODULE_SIG_FORCE=y, unsigned out-of-tree modules will be
+    # silently rejected at load time — even though they're on disk and
+    # depmod resolves them correctly.
+    KCONFIG="/usr/lib/modules/${KVER}/config"
+    SIG_FORCE=$(podman run --rm "${IMAGE}" sh -c "grep -s '^CONFIG_MODULE_SIG_FORCE=' ${KCONFIG}" || true)
+    if [[ "${SIG_FORCE}" == *"=y" ]]; then
+        echo "WARN: kernel has CONFIG_MODULE_SIG_FORCE=y — unsigned modules will be rejected with Secure Boot"
+        # Check if our modules are signed
+        SIG_ID=$(podman run --rm "${IMAGE}" modinfo -F sig_id /usr/lib/modules/${KVER}/extra/mt7927/mt7925e.ko.xz 2>/dev/null || true)
+        if [[ -n "${SIG_ID}" ]]; then
+            echo "PASS: mt7925e is signed (${SIG_ID})"
+        else
+            echo "FAIL: mt7925e is unsigned — will not load with Secure Boot enabled"
+            FAIL=1
+        fi
+    else
+        echo "PASS: kernel does not force module signatures"
+    fi
+
+    # Check modprobe dependency chain resolves entirely to our patched modules
+    # If any dependency falls back to stock kernel/, module loading could fail
+    # or load a mix of patched + stock modules with incompatible symbols.
+    DEPS=$(podman run --rm "${IMAGE}" modprobe --show-depends --set-version "${KVER}" mt7925e 2>&1 || true)
+    if echo "${DEPS}" | grep -q '^insmod '; then
+        # Only flag stock modules that we patch (mt76 family + btusb/btmtk).
+        # Stock deps like cfg80211, mac80211, rfkill are expected.
+        PATCHED_NAMES="mt76|mt792x|mt7921|mt7925|btusb|btmtk"
+        STOCK_CONFLICT=$(echo "${DEPS}" | grep '/kernel/' | grep -E "${PATCHED_NAMES}" || true)
+        if [[ -z "${STOCK_CONFLICT}" ]]; then
+            echo "PASS: all patched modules resolve to extra/mt7927"
+        else
+            echo "FAIL: patched modules falling back to stock kernel:"
+            echo "${STOCK_CONFLICT}" | while IFS= read -r line; do echo "  ${line}"; done
+            FAIL=1
+        fi
+        echo "  Full chain:"
+        echo "${DEPS}" | while IFS= read -r line; do echo "    ${line}"; done
+    else
+        echo "FAIL: modprobe --show-depends mt7925e returned no modules"
+        echo "  got: ${DEPS:-<empty>}"
         FAIL=1
     fi
 
