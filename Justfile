@@ -121,6 +121,18 @@ test $target_image=image_name $tag=default_tag:
         FAIL=1
     fi
 
+    # Check vermagic of each module matches the installed kernel
+    KVER=$(podman run --rm "${IMAGE}" rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
+    for mod in $(podman run --rm "${IMAGE}" find /usr/lib/modules -path '*/extra/mt7927/*.ko.xz'); do
+        VERMAGIC=$(podman run --rm "${IMAGE}" modinfo -F vermagic "${mod}")
+        if [[ "${VERMAGIC}" == "${KVER} "* ]]; then
+            echo "PASS: $(basename "${mod}") vermagic matches ${KVER}"
+        else
+            echo "FAIL: $(basename "${mod}") vermagic '${VERMAGIC}' does not match kernel ${KVER}"
+            FAIL=1
+        fi
+    done
+
     # Check firmware blobs
     for fw in \
         /usr/lib/firmware/mediatek/mt6639/BT_RAM_CODE_MT6639_2_1_hdr.bin \
@@ -154,6 +166,18 @@ test $target_image=image_name $tag=default_tag:
         echo "FAIL: modules.dep missing mt7927 entries (depmod may not have run)"
         FAIL=1
     fi
+
+    # Check module resolution points to our patched modules (not stock)
+    for mod in mt7925e btusb; do
+        MODPATH=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F filename "${mod}" 2>&1 || true)
+        if echo "${MODPATH}" | grep -q 'extra/mt7927'; then
+            echo "PASS: ${mod} resolves to extra/mt7927"
+        else
+            echo "FAIL: ${mod} does not resolve to extra/mt7927"
+            echo "  got: ${MODPATH}"
+            FAIL=1
+        fi
+    done
 
     if [[ "${FAIL}" -eq 0 ]]; then
         echo "All checks passed."
