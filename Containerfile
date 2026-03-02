@@ -9,10 +9,12 @@ COPY build_files /
 # Stage 1: Build patched MT7927 kernel modules
 FROM ${BASE_IMAGE} AS builder
 
+ARG APPLY_MARCIM_PATCH=""
+
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
-    /ctx/build.sh
+    APPLY_MARCIM_PATCH="${APPLY_MARCIM_PATCH}" /ctx/build.sh
 
 # Stage 2: Install only the compiled artifacts into a clean base
 FROM ${BASE_IMAGE}

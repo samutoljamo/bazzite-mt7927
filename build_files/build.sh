@@ -63,6 +63,11 @@ patch -d "${BUILD_DIR}/mt76"      -p1 < "${SUBMODULE_DIR}/mt6639-wifi-init.patch
 patch -d "${BUILD_DIR}/mt76"      -p1 < "${SUBMODULE_DIR}/mt6639-wifi-dma.patch"
 patch -d "${BUILD_DIR}/bluetooth" -p3 < "${SUBMODULE_DIR}/mt6639-bt-6.19.patch"
 
+if [[ -n "${APPLY_MARCIM_PATCH:-}" ]]; then
+    echo "Applying marcim.patch (mt6639 band_idx / ROC fixes)..."
+    patch -d "${BUILD_DIR}/mt76" -p6 < "${CTX}/patches/marcim.patch"
+fi
+
 ### Kernel compat fixes ---------------------------------------------------------
 
 # Inject airoha_offload.h stub if the kernel headers don't ship it (pre-6.19)

@@ -21,7 +21,7 @@ env:
 
 jobs:
   build_push:
-    name: Build ${{ matrix.base_image }} (${{ matrix.tag }})
+    name: Build ${{ matrix.base_image }}${{ matrix.variant.suffix }} (${{ matrix.tag }})
     runs-on: ubuntu-24.04
 
     strategy:
@@ -36,6 +36,11 @@ jobs:
         tag:
           - stable
           - testing
+        variant:
+          - suffix: ""
+            apply_marcim_patch: ""
+          - suffix: "-marcim-patch"
+            apply_marcim_patch: "1"
 
     permissions:
       contents: read
@@ -43,13 +48,13 @@ jobs:
       id-token: write
 
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ matrix.base_image }}-${{ matrix.tag }}
+      group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ matrix.base_image }}${{ matrix.variant.suffix }}-${{ matrix.tag }}
       cancel-in-progress: true
 
     steps:
       - name: Prepare environment
         run: |
-          IMAGE_NAME="${{ matrix.base_image }}-mt7927"
+          IMAGE_NAME="${{ matrix.base_image }}-mt7927${{ matrix.variant.suffix }}"
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
           IMAGE_REGISTRY="${{ env.IMAGE_REGISTRY }}"
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
@@ -109,6 +114,7 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.BASE_IMAGE }}
+            APPLY_MARCIM_PATCH=${{ matrix.variant.apply_marcim_patch }}
           oci: false
 
       - name: Setup Just
