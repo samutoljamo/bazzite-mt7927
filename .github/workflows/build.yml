@@ -33,6 +33,10 @@ jobs:
           - bazzite-nvidia
           - bazzite-gnome
           - bazzite-gnome-nvidia-open
+          - bazzite-deck
+          - bazzite-deck-gnome
+          - bazzite-deck-nvidia
+          - bazzite-deck-nvidia-gnome
         tag:
           - stable
           - testing
