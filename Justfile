@@ -87,8 +87,7 @@ sudoif command *args:
 
 # Build the image using the specified parameters
 # Pass base_image to override the upstream bazzite variant (e.g. ghcr.io/ublue-os/bazzite-gnome:stable)
-# Pass apply_marcim_patch="1" to apply the marcim.patch (mt6639 band_idx / ROC fixes)
-build $target_image=image_name $tag=default_tag $base_image="" $apply_marcim_patch="":
+build $target_image=image_name $tag=default_tag $base_image="":
     #!/usr/bin/env bash
 
     BUILD_ARGS=()
@@ -97,9 +96,6 @@ build $target_image=image_name $tag=default_tag $base_image="" $apply_marcim_pat
     fi
     if [[ -n "${base_image}" ]]; then
         BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base_image}")
-    fi
-    if [[ -n "${apply_marcim_patch}" ]]; then
-        BUILD_ARGS+=("--build-arg" "APPLY_MARCIM_PATCH=${apply_marcim_patch}")
     fi
 
     podman build \

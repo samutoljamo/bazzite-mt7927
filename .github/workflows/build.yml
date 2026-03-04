@@ -38,9 +38,6 @@ jobs:
           - testing
         variant:
           - suffix: ""
-            apply_marcim_patch: ""
-          - suffix: "-marcim-patch"
-            apply_marcim_patch: "1"
 
     permissions:
       contents: read
@@ -114,7 +111,6 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.BASE_IMAGE }}
-            APPLY_MARCIM_PATCH=${{ matrix.variant.apply_marcim_patch }}
           oci: false
 
       - name: Setup Just
