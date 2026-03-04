@@ -1,10 +1,10 @@
 # bazzite-mt7927
 
-Bazzite OCI images with MT7927 WiFi support.
+Bazzite OCI images with MT7927 WiFi and Bluetooth support.
 
 ## Status
 
-WiFi works. Bluetooth does not.
+WiFi and Bluetooth work. See the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status) for details.
 
 ## What this is
 
