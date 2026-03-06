@@ -1,5 +1,5 @@
 ---
-name: Build Bazzite images
+name: Build Bluefin images
 on:
   pull_request:
     branches:
@@ -19,23 +19,21 @@ jobs:
       fail-fast: false
       matrix:
         base_image:
-          - bazzite
-          - bazzite-nvidia-open
-          - bazzite-nvidia
-          - bazzite-gnome
-          - bazzite-gnome-nvidia-open
-          - bazzite-deck
-          - bazzite-deck-gnome
-          - bazzite-deck-nvidia
-          - bazzite-deck-nvidia-gnome
+          - bluefin
+          - bluefin-nvidia
+          - bluefin-nvidia-open
+          - bluefin-dx
+          - bluefin-dx-nvidia
+          - bluefin-dx-nvidia-open
         tag:
           - stable
           - testing
+          - gts
     uses: ./.github/workflows/build-image.yml
     with:
       base_image: ${{ matrix.base_image }}
       tag: ${{ matrix.tag }}
-      image_desc: "Bazzite with MediaTek MT7927/MT6639 WiFi 7 and Bluetooth kernel module patches"
+      image_desc: "Bluefin with MediaTek MT7927/MT6639 WiFi 7 and Bluetooth kernel module patches"
     secrets: inherit
     permissions:
       contents: read
