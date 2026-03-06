@@ -60,7 +60,7 @@ rm -f "${TARBALL}"
 
 patch -d "${BUILD_DIR}/mt76" -p1 < "${SUBMODULE_DIR}/mt7902-wifi-6.19.patch"
 
-for p in "${SUBMODULE_DIR}"/mt6639-wifi-*.patch; do
+for p in "${SUBMODULE_DIR}"/mt7927-wifi-*.patch; do
     echo "Applying $(basename "$p")..."
     patch -d "${BUILD_DIR}/mt76" -p1 < "$p"
 done
