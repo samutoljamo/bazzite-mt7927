@@ -38,7 +38,7 @@ Available with `stable` and `testing` tags.
 
 ### Bluefin
 
-Available with `stable`, `testing`, and `gts` tags.
+Available with `stable` and `gts` tags.
 
 | Image | Base | Desktop | GPU |
 |---|---|---|---|
@@ -108,7 +108,7 @@ sudo bootc switch ghcr.io/samutoljamo/bluefin-dx-nvidia-mt7927:stable
 sudo bootc switch ghcr.io/samutoljamo/bluefin-dx-nvidia-open-mt7927:stable
 ```
 
-Replace `:stable` with `:testing` or `:gts` for other channels.
+Replace `:stable` with `:gts` for the GTS channel.
 
 Reboot after switching.
 

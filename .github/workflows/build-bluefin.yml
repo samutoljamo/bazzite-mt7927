@@ -27,7 +27,6 @@ jobs:
           - bluefin-dx-nvidia-open
         tag:
           - stable
-          - testing
           - gts
     uses: ./.github/workflows/build-image.yml
     with:
