@@ -29,21 +29,9 @@ make -C "${DKMS}" sources
 
 SRCDIR="${DKMS}/_build"
 
-### Kernel compat fixes
-AIROHA_DEST="/usr/src/kernels/${KVER}/include/linux/soc/airoha/airoha_offload.h"
-if [[ ! -f "${AIROHA_DEST}" ]]; then
-    mkdir -p "$(dirname "${AIROHA_DEST}")"
-    cp "${CTX}/compat/airoha_offload.h" "${AIROHA_DEST}"
-fi
-
-if ! grep -q 'kzalloc_flex' "/usr/src/kernels/${KVER}/include/linux/slab.h" 2>/dev/null; then
-    sed -i \
-        's/kzalloc_flex(\*tid, reorder_buf, size)/kzalloc(struct_size(tid, reorder_buf, size), GFP_ATOMIC)/g' \
-        "${SRCDIR}/mt76/agg-rx.c"
-fi
-
 ### Compile
 KSRC="/lib/modules/${KVER}/build"
+"${DKMS}/apply-compat.sh" "${KSRC}" "${SRCDIR}/mt76"
 make -C "${KSRC}" M="${SRCDIR}/bluetooth" -j"$(nproc)" modules
 make -C "${KSRC}" M="${SRCDIR}/mt76"      -j"$(nproc)" modules
 
