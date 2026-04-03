@@ -31,7 +31,6 @@ SRCDIR="${DKMS}/_build"
 
 ### Compile
 KSRC="/lib/modules/${KVER}/build"
-"${DKMS}/apply-compat.sh" "${KSRC}" "${SRCDIR}/mt76"
 make -C "${KSRC}" M="${SRCDIR}/bluetooth" -j"$(nproc)" modules
 make -C "${KSRC}" M="${SRCDIR}/mt76"      -j"$(nproc)" modules
 
