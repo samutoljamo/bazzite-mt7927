@@ -20,10 +20,8 @@ jobs:
       matrix:
         base_image:
           - bluefin
-          - bluefin-nvidia
           - bluefin-nvidia-open
           - bluefin-dx
-          - bluefin-dx-nvidia
           - bluefin-dx-nvidia-open
         tag:
           - stable
