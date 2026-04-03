@@ -28,6 +28,7 @@ jobs:
           - bazzite-deck-gnome
           - bazzite-deck-nvidia
           - bazzite-deck-nvidia-gnome
+          - bazzite-asus-nvidia-open
         tag:
           - stable
           - testing
