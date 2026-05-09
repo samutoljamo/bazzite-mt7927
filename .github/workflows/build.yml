@@ -24,6 +24,9 @@ jobs:
           - bazzite-nvidia
           - bazzite-gnome
           - bazzite-gnome-nvidia-open
+          - bazzite-dx
+          - bazzite-dx-nvidia
+          - bazzite-dx-gnome
           - bazzite-deck
           - bazzite-deck-gnome
           - bazzite-deck-nvidia
@@ -31,6 +34,14 @@ jobs:
         tag:
           - stable
           - testing
+        exclude:
+          # bazzite-dx variants only publish a stable tag upstream
+          - base_image: bazzite-dx
+            tag: testing
+          - base_image: bazzite-dx-nvidia
+            tag: testing
+          - base_image: bazzite-dx-gnome
+            tag: testing
     uses: ./.github/workflows/build-image.yml
     with:
       base_image: ${{ matrix.base_image }}

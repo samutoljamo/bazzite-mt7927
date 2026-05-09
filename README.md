@@ -27,6 +27,16 @@ Available with `stable` and `testing` tags.
 | `bazzite-gnome-mt7927` | bazzite-gnome | GNOME | AMD/Intel |
 | `bazzite-gnome-nvidia-open-mt7927` | bazzite-gnome-nvidia-open | GNOME | NVIDIA (open) |
 
+#### Dev
+
+Only `stable` tag is published upstream for these.
+
+| Image | Base | Desktop | GPU |
+|---|---|---|---|
+| `bazzite-dx-mt7927` | bazzite-dx | KDE + Dev | AMD/Intel |
+| `bazzite-dx-nvidia-mt7927` | bazzite-dx-nvidia | KDE + Dev | NVIDIA (proprietary) |
+| `bazzite-dx-gnome-mt7927` | bazzite-dx-gnome | GNOME + Dev | AMD/Intel |
+
 #### Deck
 
 | Image | Base | Desktop | GPU |
@@ -70,6 +80,15 @@ sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-mt7927:stable
 
 # Desktop - GNOME + NVIDIA (open drivers)
 sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-nvidia-open-mt7927:stable
+
+# Dev - KDE + AMD/Intel
+sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-mt7927:stable
+
+# Dev - KDE + NVIDIA (proprietary drivers)
+sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-nvidia-mt7927:stable
+
+# Dev - GNOME + AMD/Intel
+sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-gnome-mt7927:stable
 
 # Deck - KDE + AMD/Intel
 sudo bootc switch ghcr.io/samutoljamo/bazzite-deck-mt7927:stable
