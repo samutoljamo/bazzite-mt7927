@@ -1,0 +1,57 @@
+---
+name: Check upstream MT7927 release
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # daily at 09:00 UTC, before the 10:05 build cycle
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Check for new upstream release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          LATEST=$(gh api repos/jetm/mediatek-mt7927-dkms/releases/latest --jq .tag_name)
+          cd build_files/mediatek-mt7927-dkms
+          git fetch --tags origin
+          CURRENT=$(git describe --tags --exact-match 2>/dev/null || echo "unknown")
+          echo "Upstream latest: $LATEST"
+          echo "Currently pinned: $CURRENT"
+          if [ "$LATEST" = "$CURRENT" ]; then
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git checkout "$LATEST"
+          {
+            echo "update_needed=true"
+            echo "latest_tag=$LATEST"
+            echo "current_tag=$CURRENT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open PR
+        if: steps.check.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "build(deps): bump mediatek-mt7927-dkms to ${{ steps.check.outputs.latest_tag }}"
+          title: "build(deps): bump mediatek-mt7927-dkms to ${{ steps.check.outputs.latest_tag }}"
+          body: |
+            Bumps the `build_files/mediatek-mt7927-dkms` submodule from `${{ steps.check.outputs.current_tag }}` to `${{ steps.check.outputs.latest_tag }}`.
+
+            Upstream release: https://github.com/jetm/mediatek-mt7927-dkms/releases/tag/${{ steps.check.outputs.latest_tag }}
+          branch: bump/mt7927-dkms
+          delete-branch: true
+          labels: dependencies
