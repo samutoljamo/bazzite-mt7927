@@ -44,7 +44,7 @@ jobs:
 
       - name: Open PR
         if: steps.check.outputs.update_needed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "build(deps): bump mediatek-mt7927-dkms to ${{ steps.check.outputs.latest_tag }}"
           title: "build(deps): bump mediatek-mt7927-dkms to ${{ steps.check.outputs.latest_tag }}"
