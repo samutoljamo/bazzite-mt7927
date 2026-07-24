@@ -5,8 +5,10 @@ Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support. Updated d
 
 WiFi and Bluetooth work. See the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status) for details.
 
-## Why no updates
-The images themselves are being automatically updated, daily. The role of this repository is narrow as it simply takes in the ready Bazzite/Bluefin images and installs the required driver that is not in the mainline kernel. Thus, commits to this repository are rare as they are currently mostly automatic versioning updates of build dependencies or updating submodule [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) when new releases come. No commits does not mean that the images are out of date. The images will get updated at least until the official Bazzite / Bluefin images support the mt7927 driver and after that users will be given time to start using the official images again.
+## Is this still maintained?
+**Yes — the images update daily, even when this repo shows no recent commits.** This repo is just packaging: it takes the upstream Bazzite/Bluefin images and adds the out-of-tree MT7927 driver. Commits are rare because there's little to change here — mostly dependency bumps and [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) submodule updates when new releases come.
+
+You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`) and rebuild daily. These images will keep updating until official Bazzite/Bluefin ships the MT7927 driver, at which point you'll be given time to switch over.
 
 ## What this is
 
