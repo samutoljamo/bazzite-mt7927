@@ -114,10 +114,47 @@ test $target_image=image_name $tag=default_tag:
 
     echo "Testing ${IMAGE}..."
 
-    # Check all 9 kernel modules
+    KVER=$(podman run --rm "${IMAGE}" rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
+
+    # build.sh stages each driver only while the base kernel lacks native support
+    # for it, and the two landed in mainline separately: MT6639 Bluetooth in 7.1,
+    # MT7927 WiFi in 7.2. Probe the in-tree modules by path rather than through
+    # modinfo's name lookup, which depmod.d/mt7927.conf would resolve to extra/ —
+    # we need the base kernel's own capability here.
+    BASE_BTMTK=$(podman run --rm "${IMAGE}" sh -c "find /usr/lib/modules/${KVER}/kernel -name 'btmtk.ko*' | head -1")
+    BT_EXPECTED=1
+    if [[ -n "${BASE_BTMTK}" ]] && podman run --rm "${IMAGE}" sh -c "modinfo -F firmware '${BASE_BTMTK}' 2>/dev/null | grep -q MT6639"; then
+        BT_EXPECTED=0
+        echo "Kernel ${KVER} has native MT6639 Bluetooth — expecting in-tree btusb/btmtk"
+    else
+        echo "Kernel ${KVER} has no native MT6639 Bluetooth — expecting out-of-tree btusb/btmtk"
+    fi
+
+    BASE_MT7925E=$(podman run --rm "${IMAGE}" sh -c "find /usr/lib/modules/${KVER}/kernel -name 'mt7925e.ko*' | head -1")
+    WIFI_EXPECTED=1
+    if [[ -n "${BASE_MT7925E}" ]] && podman run --rm "${IMAGE}" sh -c "modinfo -F alias '${BASE_MT7925E}' 2>/dev/null | grep -q 7927"; then
+        WIFI_EXPECTED=0
+        echo "Kernel ${KVER} has native MT7927 WiFi — expecting in-tree mt76/mt7925"
+    else
+        echo "Kernel ${KVER} has no native MT7927 WiFi — expecting out-of-tree mt76/mt7925"
+    fi
+
+    # 7 WiFi modules and 2 Bluetooth modules, each set staged only while the
+    # kernel still needs it. Both drop to zero once the kernel carries the
+    # complete series and the image ships firmware and config alone.
+    EXPECTED_COUNT=$(( WIFI_EXPECTED * 7 + BT_EXPECTED * 2 ))
+
+    # A module we know is staged, for the checks that need to sample one.
+    SAMPLE_MOD=""
+    if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
+        SAMPLE_MOD="mt7925e"
+    elif [[ "${BT_EXPECTED}" -eq 1 ]]; then
+        SAMPLE_MOD="btusb"
+    fi
+
+    # Check kernel modules
     MODULES=$(podman run --rm "${IMAGE}" find /usr/lib/modules -path '*/extra/mt7927/*.ko.xz' | sort)
-    EXPECTED_COUNT=9
-    ACTUAL_COUNT=$(echo "${MODULES}" | wc -l)
+    ACTUAL_COUNT=$(printf '%s' "${MODULES}" | grep -c . || true)
     if [[ "${ACTUAL_COUNT}" -eq "${EXPECTED_COUNT}" ]]; then
         echo "PASS: ${ACTUAL_COUNT} kernel modules found"
     else
@@ -126,7 +163,6 @@ test $target_image=image_name $tag=default_tag:
     fi
 
     # Check vermagic of each module matches the installed kernel
-    KVER=$(podman run --rm "${IMAGE}" rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
     for mod in $(podman run --rm "${IMAGE}" find /usr/lib/modules -path '*/extra/mt7927/*.ko.xz'); do
         VERMAGIC=$(podman run --rm "${IMAGE}" modinfo -F vermagic "${mod}")
         if [[ "${VERMAGIC}" == "${KVER} "* ]]; then
@@ -138,12 +174,16 @@ test $target_image=image_name $tag=default_tag:
     done
 
     # Check xz compression uses CRC32 (kernel decompressor doesn't support CRC64)
-    XZ_CHECK=$(podman run --rm "${IMAGE}" sh -c "xz --robot --list /usr/lib/modules/${KVER}/extra/mt7927/mt7925e.ko.xz" | grep -oP 'CRC\d+' | head -1 || true)
-    if [[ "${XZ_CHECK}" == "CRC32" ]]; then
-        echo "PASS: module xz compression uses CRC32"
+    if [[ -n "${SAMPLE_MOD}" ]]; then
+        XZ_CHECK=$(podman run --rm "${IMAGE}" sh -c "xz --robot --list /usr/lib/modules/${KVER}/extra/mt7927/${SAMPLE_MOD}.ko.xz" | grep -oP 'CRC\d+' | head -1 || true)
+        if [[ "${XZ_CHECK}" == "CRC32" ]]; then
+            echo "PASS: module xz compression uses CRC32"
+        else
+            echo "FAIL: module xz compression uses ${XZ_CHECK:-unknown} (kernel requires CRC32)"
+            FAIL=1
+        fi
     else
-        echo "FAIL: module xz compression uses ${XZ_CHECK:-unknown} (kernel requires CRC32)"
-        FAIL=1
+        echo "SKIP: no out-of-tree modules staged, no xz compression to check"
     fi
 
     # Check firmware blobs
@@ -172,15 +212,26 @@ test $target_image=image_name $tag=default_tag:
     done
 
     # Check depmod ran (modules.dep should reference our modules)
-    if podman run --rm "${IMAGE}" sh -c "grep -q 'extra/mt7927' /usr/lib/modules/*/modules.dep"; then
-        echo "PASS: modules.dep references extra/mt7927"
+    if [[ "${EXPECTED_COUNT}" -gt 0 ]]; then
+        if podman run --rm "${IMAGE}" sh -c "grep -q 'extra/mt7927' /usr/lib/modules/*/modules.dep"; then
+            echo "PASS: modules.dep references extra/mt7927"
+        else
+            echo "FAIL: modules.dep missing mt7927 entries (depmod may not have run)"
+            FAIL=1
+        fi
     else
-        echo "FAIL: modules.dep missing mt7927 entries (depmod may not have run)"
-        FAIL=1
+        echo "SKIP: no out-of-tree modules staged, modules.dep has nothing to reference"
     fi
 
     # Check module resolution points to our patched modules (not stock)
-    for mod in mt7925e btusb; do
+    RESOLVE_MODS=()
+    if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
+        RESOLVE_MODS+=(mt7925e)
+    fi
+    if [[ "${BT_EXPECTED}" -eq 1 ]]; then
+        RESOLVE_MODS+=(btusb)
+    fi
+    for mod in "${RESOLVE_MODS[@]}"; do
         MODPATH=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F filename "${mod}" 2>&1 || true)
         if echo "${MODPATH}" | grep -q 'extra/mt7927'; then
             echo "PASS: ${mod} resolves to extra/mt7927"
@@ -190,6 +241,46 @@ test $target_image=image_name $tag=default_tag:
             FAIL=1
         fi
     done
+
+    # The mirror image: once the kernel has caught up we must NOT shadow its own
+    # modules, or we would silently downgrade them to the older tarball build.
+    SHADOW_MODS=()
+    if [[ "${WIFI_EXPECTED}" -eq 0 ]]; then
+        SHADOW_MODS+=(mt7925e)
+    fi
+    if [[ "${BT_EXPECTED}" -eq 0 ]]; then
+        SHADOW_MODS+=(btusb)
+    fi
+    for mod in "${SHADOW_MODS[@]}"; do
+        MODPATH=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F filename "${mod}" 2>&1 || true)
+        if echo "${MODPATH}" | grep -q 'extra/mt7927'; then
+            echo "FAIL: ${mod} is shadowed by extra/mt7927 despite native kernel support"
+            echo "  got: ${MODPATH}"
+            FAIL=1
+        else
+            echo "PASS: ${mod} resolves to the in-tree module"
+        fi
+    done
+
+    # Whichever driver wins, it must ask for the firmware we stage, or the
+    # hardware stays dead however the modules resolved.
+    BTMTK_FW=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F firmware btmtk 2>&1 || true)
+    if echo "${BTMTK_FW}" | grep -q 'MT6639'; then
+        echo "PASS: resolved btmtk declares MT6639 firmware"
+    else
+        echo "FAIL: resolved btmtk declares no MT6639 firmware — Bluetooth will not work"
+        echo "  got: ${BTMTK_FW:-<empty>}"
+        FAIL=1
+    fi
+
+    MT7925E_FW=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F firmware mt7925e 2>&1 || true)
+    if echo "${MT7925E_FW}" | grep -q 'mt7927/WIFI_RAM_CODE_MT6639_2_1.bin'; then
+        echo "PASS: resolved mt7925e declares MT7927 firmware"
+    else
+        echo "FAIL: resolved mt7925e declares no MT7927 firmware — WiFi will not work"
+        echo "  got: ${MT7925E_FW:-<empty>}"
+        FAIL=1
+    fi
 
     # Check modules.alias maps MT7927 PCI ID to our patched mt7925e
     # This is the critical check: even if modules are on disk, the kernel
@@ -214,12 +305,16 @@ test $target_image=image_name $tag=default_tag:
     if [[ "${SIG_FORCE}" == *"=y" ]]; then
         echo "WARN: kernel has CONFIG_MODULE_SIG_FORCE=y — unsigned modules will be rejected with Secure Boot"
         # Check if our modules are signed
-        SIG_ID=$(podman run --rm "${IMAGE}" modinfo -F sig_id /usr/lib/modules/${KVER}/extra/mt7927/mt7925e.ko.xz 2>/dev/null || true)
-        if [[ -n "${SIG_ID}" ]]; then
-            echo "PASS: mt7925e is signed (${SIG_ID})"
+        if [[ -n "${SAMPLE_MOD}" ]]; then
+            SIG_ID=$(podman run --rm "${IMAGE}" modinfo -F sig_id "/usr/lib/modules/${KVER}/extra/mt7927/${SAMPLE_MOD}.ko.xz" 2>/dev/null || true)
+            if [[ -n "${SIG_ID}" ]]; then
+                echo "PASS: ${SAMPLE_MOD} is signed (${SIG_ID})"
+            else
+                echo "FAIL: ${SAMPLE_MOD} is unsigned — will not load with Secure Boot enabled"
+                FAIL=1
+            fi
         else
-            echo "FAIL: mt7925e is unsigned — will not load with Secure Boot enabled"
-            FAIL=1
+            echo "PASS: no out-of-tree modules staged, nothing needs signing"
         fi
     else
         echo "PASS: kernel does not force module signatures"
@@ -230,12 +325,22 @@ test $target_image=image_name $tag=default_tag:
     # or load a mix of patched + stock modules with incompatible symbols.
     DEPS=$(podman run --rm "${IMAGE}" modprobe --show-depends --set-version "${KVER}" mt7925e 2>&1 || true)
     if echo "${DEPS}" | grep -q '^insmod '; then
-        # Only flag stock modules that we patch (mt76 family + btusb/btmtk).
-        # Stock deps like cfg80211, mac80211, rfkill are expected.
-        PATCHED_NAMES="mt76|mt792x|mt7921|mt7925|btusb|btmtk"
-        STOCK_CONFLICT=$(echo "${DEPS}" | grep '/kernel/' | grep -E "${PATCHED_NAMES}" || true)
+        # Only flag stock modules that we still patch on this kernel. Stock deps
+        # like cfg80211, mac80211 and rfkill are expected, and so is the whole
+        # mt76 family once the kernel carries the MT7927 series itself.
+        PATCHED_NAMES=""
+        if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
+            PATCHED_NAMES="mt76|mt792x|mt7921|mt7925"
+        fi
+        if [[ "${BT_EXPECTED}" -eq 1 ]]; then
+            PATCHED_NAMES="${PATCHED_NAMES:+${PATCHED_NAMES}|}btusb|btmtk"
+        fi
+        STOCK_CONFLICT=""
+        if [[ -n "${PATCHED_NAMES}" ]]; then
+            STOCK_CONFLICT=$(echo "${DEPS}" | grep '/kernel/' | grep -E "${PATCHED_NAMES}" || true)
+        fi
         if [[ -z "${STOCK_CONFLICT}" ]]; then
-            echo "PASS: all patched modules resolve to extra/mt7927"
+            echo "PASS: no patched module falls back to the stock kernel"
         else
             echo "FAIL: patched modules falling back to stock kernel:"
             echo "${STOCK_CONFLICT}" | while IFS= read -r line; do echo "  ${line}"; done
