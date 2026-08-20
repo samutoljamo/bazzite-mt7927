@@ -3,12 +3,28 @@ Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support. Updated d
 
 ## Status
 
-WiFi and Bluetooth work. See the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status) for details.
+WiFi and Bluetooth both work in these images, on every channel.
+
+Mainline caught up in two stages: the Bluetooth driver (`btmtk`) landed in kernel 7.1, the WiFi driver (`mt7925e`) in 7.2. Firmware did not follow. `linux-firmware` ships the MT7927 WiFi blobs, but contains no Bluetooth blob at all.
+
+What that means for the **official** images (kernel versions as of 2026-08-20):
+
+| Official image | Kernel | WiFi | Bluetooth |
+|---|---|---|---|
+| `bazzite:testing` | 7.2.0 | works, in-tree driver | no firmware |
+| `bazzite:stable` | 7.1.5 | no driver | no firmware |
+| `bluefin:stable`, `bluefin:gts` | 7.1.4 | no driver | no firmware |
+
+Official Bazzite `testing` already has working MT7927 WiFi. Bluetooth works on no official image, and will not until `linux-firmware` ships `BT_RAM_CODE_MT6639_2_1_hdr.bin` — the driver has been there since 7.1, but it cannot bring up the chip without that blob.
+
+These images fill both gaps: the out-of-tree WiFi driver wherever the kernel is still 7.1, and the Bluetooth firmware everywhere. They also carry the vendor driver's WiFi blobs, which are newer than the compressed ones in Fedora's `mt7xxx-firmware`.
+
+For driver-level detail, see the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status).
 
 ## Is this still maintained?
 **Yes — the images update daily, even when this repo shows no recent commits.** This repo is just packaging: it takes the upstream Bazzite/Bluefin images and adds the out-of-tree MT7927 driver. Commits are rare because there's little to change here — mostly dependency bumps and [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) submodule updates when new releases come.
 
-You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`) and rebuild daily. These images will keep updating until official Bazzite/Bluefin ships the MT7927 driver, at which point you'll be given time to switch over.
+You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`) and rebuild daily. These images will keep updating until the official images cover MT7927 on their own. That needs `linux-firmware` to ship the Bluetooth blob, not just the kernel drivers that have already landed. When it happens, you'll be given time to switch over.
 
 ## What this is
 
