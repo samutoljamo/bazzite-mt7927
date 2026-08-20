@@ -186,15 +186,31 @@ test $target_image=image_name $tag=default_tag:
         echo "SKIP: no out-of-tree modules staged, no xz compression to check"
     fi
 
-    # Check firmware blobs
-    for fw in \
-        /usr/lib/firmware/mediatek/mt7927/BT_RAM_CODE_MT6639_2_1_hdr.bin \
-        /usr/lib/firmware/mediatek/mt7927/WIFI_MT6639_PATCH_MCU_2_1_hdr.bin \
-        /usr/lib/firmware/mediatek/mt7927/WIFI_RAM_CODE_MT6639_2_1.bin; do
-        if podman run --rm "${IMAGE}" test -f "${fw}"; then
-            echo "PASS: ${fw}"
+    # Check firmware blobs. A blob satisfies the driver whether we staged it
+    # plain or linux-firmware shipped it compressed, since the loader falls back
+    # to .xz/.zst when the bare name is absent. Having both at once is the
+    # failure worth catching: that is us shadowing the distro's copy, which is
+    # how WiFi firmware silently regressed to the vendor ZIP's older build.
+    FW_DIR=/usr/lib/firmware/mediatek/mt7927
+    FW_LIST=$(podman run --rm "${IMAGE}" sh -c "ls -1 ${FW_DIR} 2>/dev/null" || true)
+    for blob in \
+        BT_RAM_CODE_MT6639_2_1_hdr.bin \
+        WIFI_MT6639_PATCH_MCU_2_1_hdr.bin \
+        WIFI_RAM_CODE_MT6639_2_1.bin; do
+        HAVE_PLAIN=0
+        HAVE_COMP=0
+        grep -Fqx "${blob}"      <<< "${FW_LIST}" && HAVE_PLAIN=1 || true
+        grep -Fqx "${blob}.xz"   <<< "${FW_LIST}" && HAVE_COMP=1  || true
+        grep -Fqx "${blob}.zst"  <<< "${FW_LIST}" && HAVE_COMP=1  || true
+        if [[ "${HAVE_PLAIN}" -eq 1 && "${HAVE_COMP}" -eq 1 ]]; then
+            echo "FAIL: ${blob} staged on top of linux-firmware's compressed copy"
+            FAIL=1
+        elif [[ "${HAVE_PLAIN}" -eq 1 ]]; then
+            echo "PASS: ${blob} (staged by this image)"
+        elif [[ "${HAVE_COMP}" -eq 1 ]]; then
+            echo "PASS: ${blob} (provided by linux-firmware)"
         else
-            echo "FAIL: missing ${fw}"
+            echo "FAIL: ${blob} absent — the driver has no firmware to load"
             FAIL=1
         fi
     done
