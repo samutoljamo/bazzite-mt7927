@@ -17,7 +17,7 @@ What that means for the **official** images (kernel versions as of 2026-08-20):
 
 Official Bazzite `testing` already has working MT7927 WiFi. Bluetooth works on no official image, and will not until `linux-firmware` ships `BT_RAM_CODE_MT6639_2_1_hdr.bin` — the driver has been there since 7.1, but it cannot bring up the chip without that blob.
 
-These images fill both gaps: the out-of-tree WiFi driver wherever the kernel is still 7.1, and the Bluetooth firmware everywhere. They also carry the vendor driver's WiFi blobs, which are newer than the compressed ones in Fedora's `mt7xxx-firmware`.
+These images fill both gaps: the out-of-tree WiFi driver wherever the kernel is still 7.1, and the Bluetooth firmware everywhere.
 
 For driver-level detail, see the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status).
 
