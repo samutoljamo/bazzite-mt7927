@@ -55,6 +55,82 @@ jobs:
       - name: Maximize build space
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
 
+      # The DKMS submodule's `make download` pulls a ~151MB kernel tarball from
+      # cdn.kernel.org and the vendor driver ZIP from the ASUS CDN using a single
+      # curl with no retry. All 29 matrix jobs across this and the Bluefin workflow
+      # fire on the same cron, so that is a ~4.4GB burst at one CDN edge from one
+      # Azure region — the single largest source of CI failures (curl 92 HTTP/2
+      # PROTOCOL_ERROR, curl 28 timeout, curl 35 SSL connect).
+      #
+      # Both of the submodule's download steps are no-ops when the file is already
+      # present, so seeding the files here means `make download` never touches the
+      # network. The cache is shared across every matrix job and across runs.
+      - name: Resolve source versions
+        id: srcver
+        run: |
+          DKMS=build_files/mediatek-mt7927-dkms
+          MT76_KVER=$(sed -n "s/^_mt76_kver='\(.*\)'/\1/p" "${DKMS}/PKGBUILD")
+          DRIVER_ZIP=$(grep -m1 '^DRIVER_FILENAME=' "${DKMS}/download-driver.sh" \
+            | sed 's/.*:-//; s/}"$//')
+          test -n "${MT76_KVER}" && test -n "${DRIVER_ZIP}"
+          echo "mt76_kver=${MT76_KVER}" >> "${GITHUB_OUTPUT}"
+          echo "driver_zip=${DRIVER_ZIP}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache MT7927 build sources
+        uses: actions/cache@v4
+        with:
+          path: |
+            build_files/mediatek-mt7927-dkms/linux-${{ steps.srcver.outputs.mt76_kver }}.tar.xz
+            build_files/mediatek-mt7927-dkms/${{ steps.srcver.outputs.driver_zip }}
+          key: mt7927-sources-${{ steps.srcver.outputs.mt76_kver }}-${{ steps.srcver.outputs.driver_zip }}
+
+      - name: Fetch MT7927 build sources
+        env:
+          MT76_KVER: ${{ steps.srcver.outputs.mt76_kver }}
+          DRIVER_ZIP: ${{ steps.srcver.outputs.driver_zip }}
+        run: |
+          set -euo pipefail
+          cd build_files/mediatek-mt7927-dkms
+
+          # --http1.1 sidesteps the HTTP/2 PROTOCOL_ERROR cdn.kernel.org returns
+          # under concurrent load; -C - resumes a partial transfer rather than
+          # restarting all 151MB. The outer loop re-evaluates the resume offset,
+          # which curl's own --retry does not do reliably.
+          TARBALL="linux-${MT76_KVER}.tar.xz"
+          URL="https://cdn.kernel.org/pub/linux/kernel/v${MT76_KVER%%.*}.x/${TARBALL}"
+          for attempt in 1 2 3 4 5; do
+            # xz -l only reads the stream index at the end of the file, so this
+            # rejects a truncated cache entry without decompressing 151MB.
+            if [[ -f "${TARBALL}" ]] && xz -l "${TARBALL}" >/dev/null 2>&1; then
+              echo "Kernel tarball present and readable: ${TARBALL}"
+              break
+            fi
+            echo "Fetching ${TARBALL} (attempt ${attempt})"
+            curl -fL --http1.1 -C - --connect-timeout 30 \
+                 --retry 3 --retry-delay 5 --retry-all-errors \
+                 -o "${TARBALL}" "${URL}" || true
+            if [[ "${attempt}" -eq 5 ]]; then
+              echo "::error::could not fetch ${TARBALL} from cdn.kernel.org"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
+
+          # download-driver.sh mints a short-lived signed CloudFront URL, so the
+          # whole script has to be retried, not just the transfer.
+          for attempt in 1 2 3 4 5; do
+            if [[ -f "${DRIVER_ZIP}" ]]; then
+              echo "Driver ZIP present: ${DRIVER_ZIP}"
+              break
+            fi
+            ./download-driver.sh . && break
+            if [[ "${attempt}" -eq 5 ]]; then
+              echo "::error::could not fetch ${DRIVER_ZIP} from the ASUS CDN"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+
       - name: Get current date
         id: date
         run: |
@@ -141,8 +217,21 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          # 29 jobs signing 2 tags each blows GHCR's 2000 req/minute secondary
+          # limit, which surfaces as TOOMANYREQUESTS / 403 permission_denied.
+          # cosign has no retry of its own, so back off and try again.
           for tag in ${{ steps.metadata.outputs.tags }}; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY $IMAGE_FULL:$tag
+            for attempt in 1 2 3 4 5; do
+              if cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}:${tag}"; then
+                break
+              fi
+              if [[ "${attempt}" -eq 5 ]]; then
+                echo "::error::cosign sign failed for ${IMAGE_FULL}:${tag}"
+                exit 1
+              fi
+              echo "cosign sign failed for ${tag}, retrying in $((attempt * 20))s"
+              sleep $((attempt * 20))
+            done
           done
         env:
           TAGS: ${{ steps.push.outputs.digest }}
