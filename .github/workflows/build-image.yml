@@ -77,7 +77,7 @@ jobs:
           echo "driver_zip=${DRIVER_ZIP}" >> "${GITHUB_OUTPUT}"
 
       - name: Cache MT7927 build sources
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             build_files/mediatek-mt7927-dkms/linux-${{ steps.srcver.outputs.mt76_kver }}.tar.xz
