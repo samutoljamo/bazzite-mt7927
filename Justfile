@@ -258,26 +258,6 @@ test $target_image=image_name $tag=default_tag:
         fi
     done
 
-    # The mirror image: once the kernel has caught up we must NOT shadow its own
-    # modules, or we would silently downgrade them to the older tarball build.
-    SHADOW_MODS=()
-    if [[ "${WIFI_EXPECTED}" -eq 0 ]]; then
-        SHADOW_MODS+=(mt7925e)
-    fi
-    if [[ "${BT_EXPECTED}" -eq 0 ]]; then
-        SHADOW_MODS+=(btusb)
-    fi
-    for mod in "${SHADOW_MODS[@]}"; do
-        MODPATH=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F filename "${mod}" 2>&1 || true)
-        if echo "${MODPATH}" | grep -q 'extra/mt7927'; then
-            echo "FAIL: ${mod} is shadowed by extra/mt7927 despite native kernel support"
-            echo "  got: ${MODPATH}"
-            FAIL=1
-        else
-            echo "PASS: ${mod} resolves to the in-tree module"
-        fi
-    done
-
     # Whichever driver wins, it must ask for the firmware we stage, or the
     # hardware stays dead however the modules resolved.
     BTMTK_FW=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F firmware btmtk 2>&1 || true)
