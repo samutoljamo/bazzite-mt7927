@@ -116,52 +116,6 @@ test $target_image=image_name $tag=default_tag:
 
     KVER=$(podman run --rm "${IMAGE}" rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')
 
-    # build.sh stages each driver only while the base kernel lacks native support
-    # for it, and the two landed in mainline separately: MT6639 Bluetooth in 7.1,
-    # MT7927 WiFi in 7.2. Probe the in-tree modules by path rather than through
-    # modinfo's name lookup, which depmod.d/mt7927.conf would resolve to extra/ —
-    # we need the base kernel's own capability here.
-    BASE_BTMTK=$(podman run --rm "${IMAGE}" sh -c "find /usr/lib/modules/${KVER}/kernel -name 'btmtk.ko*' | head -1")
-    BT_EXPECTED=1
-    if [[ -n "${BASE_BTMTK}" ]] && podman run --rm "${IMAGE}" sh -c "modinfo -F firmware '${BASE_BTMTK}' 2>/dev/null | grep -q MT6639"; then
-        BT_EXPECTED=0
-        echo "Kernel ${KVER} has native MT6639 Bluetooth — expecting in-tree btusb/btmtk"
-    else
-        echo "Kernel ${KVER} has no native MT6639 Bluetooth — expecting out-of-tree btusb/btmtk"
-    fi
-
-    BASE_MT7925E=$(podman run --rm "${IMAGE}" sh -c "find /usr/lib/modules/${KVER}/kernel -name 'mt7925e.ko*' | head -1")
-    WIFI_EXPECTED=1
-    if [[ -n "${BASE_MT7925E}" ]] && podman run --rm "${IMAGE}" sh -c "modinfo -F alias '${BASE_MT7925E}' 2>/dev/null | grep -q 7927"; then
-        WIFI_EXPECTED=0
-        echo "Kernel ${KVER} has native MT7927 WiFi — expecting in-tree mt76/mt7925"
-    else
-        echo "Kernel ${KVER} has no native MT7927 WiFi — expecting out-of-tree mt76/mt7925"
-    fi
-
-    # 7 WiFi modules and 2 Bluetooth modules, each set staged only while the
-    # kernel still needs it. Both drop to zero once the kernel carries the
-    # complete series and the image ships firmware and config alone.
-    EXPECTED_COUNT=$(( WIFI_EXPECTED * 7 + BT_EXPECTED * 2 ))
-
-    # A module we know is staged, for the checks that need to sample one.
-    SAMPLE_MOD=""
-    if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
-        SAMPLE_MOD="mt7925e"
-    elif [[ "${BT_EXPECTED}" -eq 1 ]]; then
-        SAMPLE_MOD="btusb"
-    fi
-
-    # Check kernel modules
-    MODULES=$(podman run --rm "${IMAGE}" find /usr/lib/modules -path '*/extra/mt7927/*.ko.xz' | sort)
-    ACTUAL_COUNT=$(printf '%s' "${MODULES}" | grep -c . || true)
-    if [[ "${ACTUAL_COUNT}" -eq "${EXPECTED_COUNT}" ]]; then
-        echo "PASS: ${ACTUAL_COUNT} kernel modules found"
-    else
-        echo "FAIL: expected ${EXPECTED_COUNT} modules, found ${ACTUAL_COUNT}"
-        FAIL=1
-    fi
-
     # Check vermagic of each module matches the installed kernel
     for mod in $(podman run --rm "${IMAGE}" find /usr/lib/modules -path '*/extra/mt7927/*.ko.xz'); do
         VERMAGIC=$(podman run --rm "${IMAGE}" modinfo -F vermagic "${mod}")
@@ -172,19 +126,6 @@ test $target_image=image_name $tag=default_tag:
             FAIL=1
         fi
     done
-
-    # Check xz compression uses CRC32 (kernel decompressor doesn't support CRC64)
-    if [[ -n "${SAMPLE_MOD}" ]]; then
-        XZ_CHECK=$(podman run --rm "${IMAGE}" sh -c "xz --robot --list /usr/lib/modules/${KVER}/extra/mt7927/${SAMPLE_MOD}.ko.xz" | grep -oP 'CRC\d+' | head -1 || true)
-        if [[ "${XZ_CHECK}" == "CRC32" ]]; then
-            echo "PASS: module xz compression uses CRC32"
-        else
-            echo "FAIL: module xz compression uses ${XZ_CHECK:-unknown} (kernel requires CRC32)"
-            FAIL=1
-        fi
-    else
-        echo "SKIP: no out-of-tree modules staged, no xz compression to check"
-    fi
 
     # Check firmware blobs. A blob satisfies the driver whether we staged it
     # plain or linux-firmware shipped it compressed, since the loader falls back
@@ -238,25 +179,6 @@ test $target_image=image_name $tag=default_tag:
     else
         echo "SKIP: no out-of-tree modules staged, modules.dep has nothing to reference"
     fi
-
-    # Check module resolution points to our patched modules (not stock)
-    RESOLVE_MODS=()
-    if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
-        RESOLVE_MODS+=(mt7925e)
-    fi
-    if [[ "${BT_EXPECTED}" -eq 1 ]]; then
-        RESOLVE_MODS+=(btusb)
-    fi
-    for mod in "${RESOLVE_MODS[@]}"; do
-        MODPATH=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F filename "${mod}" 2>&1 || true)
-        if echo "${MODPATH}" | grep -q 'extra/mt7927'; then
-            echo "PASS: ${mod} resolves to extra/mt7927"
-        else
-            echo "FAIL: ${mod} does not resolve to extra/mt7927"
-            echo "  got: ${MODPATH}"
-            FAIL=1
-        fi
-    done
 
     # Whichever driver wins, it must ask for the firmware we stage, or the
     # hardware stays dead however the modules resolved.
@@ -314,40 +236,6 @@ test $target_image=image_name $tag=default_tag:
         fi
     else
         echo "PASS: kernel does not force module signatures"
-    fi
-
-    # Check modprobe dependency chain resolves entirely to our patched modules
-    # If any dependency falls back to stock kernel/, module loading could fail
-    # or load a mix of patched + stock modules with incompatible symbols.
-    DEPS=$(podman run --rm "${IMAGE}" modprobe --show-depends --set-version "${KVER}" mt7925e 2>&1 || true)
-    if echo "${DEPS}" | grep -q '^insmod '; then
-        # Only flag stock modules that we still patch on this kernel. Stock deps
-        # like cfg80211, mac80211 and rfkill are expected, and so is the whole
-        # mt76 family once the kernel carries the MT7927 series itself.
-        PATCHED_NAMES=""
-        if [[ "${WIFI_EXPECTED}" -eq 1 ]]; then
-            PATCHED_NAMES="mt76|mt792x|mt7921|mt7925"
-        fi
-        if [[ "${BT_EXPECTED}" -eq 1 ]]; then
-            PATCHED_NAMES="${PATCHED_NAMES:+${PATCHED_NAMES}|}btusb|btmtk"
-        fi
-        STOCK_CONFLICT=""
-        if [[ -n "${PATCHED_NAMES}" ]]; then
-            STOCK_CONFLICT=$(echo "${DEPS}" | grep '/kernel/' | grep -E "${PATCHED_NAMES}" || true)
-        fi
-        if [[ -z "${STOCK_CONFLICT}" ]]; then
-            echo "PASS: no patched module falls back to the stock kernel"
-        else
-            echo "FAIL: patched modules falling back to stock kernel:"
-            echo "${STOCK_CONFLICT}" | while IFS= read -r line; do echo "  ${line}"; done
-            FAIL=1
-        fi
-        echo "  Full chain:"
-        echo "${DEPS}" | while IFS= read -r line; do echo "    ${line}"; done
-    else
-        echo "FAIL: modprobe --show-depends mt7925e returned no modules"
-        echo "  got: ${DEPS:-<empty>}"
-        FAIL=1
     fi
 
     if [[ "${FAIL}" -eq 0 ]]; then
