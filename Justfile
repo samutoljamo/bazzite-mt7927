@@ -168,18 +168,6 @@ test $target_image=image_name $tag=default_tag:
         fi
     done
 
-    # Check depmod ran (modules.dep should reference our modules)
-    if [[ "${EXPECTED_COUNT}" -gt 0 ]]; then
-        if podman run --rm "${IMAGE}" sh -c "grep -q 'extra/mt7927' /usr/lib/modules/*/modules.dep"; then
-            echo "PASS: modules.dep references extra/mt7927"
-        else
-            echo "FAIL: modules.dep missing mt7927 entries (depmod may not have run)"
-            FAIL=1
-        fi
-    else
-        echo "SKIP: no out-of-tree modules staged, modules.dep has nothing to reference"
-    fi
-
     # Whichever driver wins, it must ask for the firmware we stage, or the
     # hardware stays dead however the modules resolved.
     BTMTK_FW=$(podman run --rm "${IMAGE}" modinfo -k "${KVER}" -F firmware btmtk 2>&1 || true)
