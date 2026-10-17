@@ -9,6 +9,11 @@ OUTPUT_DIR="/output"
 KVER=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' | tail -1)
 echo "Building MT7927 modules for kernel: ${KVER}"
 
+KVER_BASE=${KVER%%-*}
+KVER_MAJOR=${KVER_BASE%%.*}
+KVER_REST=${KVER_BASE#*.}
+KVER_MINOR=${KVER_REST%%.*}
+
 ### Upstream detection guards
 # Probe what the base image's in-tree modules already claim, so we never shadow
 # a kernel that has caught up with the out-of-tree patches. The two drivers
@@ -16,17 +21,23 @@ echo "Building MT7927 modules for kernel: ${KVER}"
 BUILD_WIFI=1
 BUILD_BT=1
 
-if modinfo -k "${KVER}" -F alias mt7925e 2>/dev/null | grep -q '7927'; then
-    echo "MT7927 WiFi support already present in kernel ${KVER}, skipping WiFi modules."
-    BUILD_WIFI=0
+# Bluetooth: native MT6639 support in 7.1+
+if (( KVER_MAJOR > 7 || (KVER_MAJOR == 7 && KVER_MINOR >= 1) )); then
+    BUILD_BT=0
+else
+    BUILD_BT=1
 fi
 
-# Native MT6639 Bluetooth landed in kernel 7.1. Those btmtk builds declare the
-# MT6639 firmware via MODULE_FIRMWARE; earlier ones know nothing about the chip.
-if modinfo -k "${KVER}" -F firmware btmtk 2>/dev/null | grep -q 'MT6639'; then
-    echo "MT6639 Bluetooth support already present in kernel ${KVER}, skipping Bluetooth modules."
-    BUILD_BT=0
+# Wi-Fi: native MT7927 support in 7.2+
+if (( KVER_MAJOR > 7 || (KVER_MAJOR == 7 && KVER_MINOR >= 2) )); then
+    BUILD_WIFI=0
+else
+    BUILD_WIFI=1
 fi
+
+echo "Kernel: ${KVER}"
+echo "BUILD_BT=${BUILD_BT}"
+echo "BUILD_WIFI=${BUILD_WIFI}"
 
 ### Install build dependencies
 dnf5 install -y --skip-unavailable \
