@@ -1,34 +1,25 @@
 # bazzite-mt7927 / bluefin-mt7927
-Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support. Updated daily.
+Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support, rebuilt daily.
+
+The kernel module patches come from [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) (included as a git submodule). This repo packages them, plus the Bluetooth firmware, into the upstream Bazzite and Bluefin images for multiple variants.
 
 ## Status
 
-WiFi and Bluetooth both work in these images, on every channel.
+WiFi and Bluetooth work in these images on every published channel (`stable`, `testing`, `gts`).
 
-Mainline caught up in two stages: the Bluetooth driver (`btmtk`) landed in kernel 7.1, the WiFi driver (`mt7925e`) in 7.2. Firmware did not follow. `linux-firmware` ships the MT7927 WiFi blobs, but contains no Bluetooth blob at all.
+Upstream has mostly caught up: the Bluetooth driver (`btmtk`) landed in kernel 7.1, the WiFi driver (`mt7925e`) in 7.2, and `linux-firmware` ships the MT7927 WiFi blobs. Official images on a 7.2+ kernel — currently all main Bazzite and Bluefin variants — have working MT7927 WiFi out of the box.
 
-What that means for the **official** images (kernel versions as of 2026-08-20):
+What still doesn't work in the **official** images (as of 2026-11-09):
 
-| Official image | Kernel | WiFi | Bluetooth |
-|---|---|---|---|
-| `bazzite:testing` | 7.2.0 | works, in-tree driver | no firmware |
-| `bazzite:stable` | 7.1.5 | no driver | no firmware |
-| `bluefin:stable`, `bluefin:gts` | 7.1.4 | no driver | no firmware |
-
-Official Bazzite `testing` already has working MT7927 WiFi. Bluetooth works on no official image, and will not until `linux-firmware` ships `BT_RAM_CODE_MT6639_2_1_hdr.bin` — the driver has been there since 7.1, but it cannot bring up the chip without that blob.
-
-These images fill both gaps: the out-of-tree WiFi driver wherever the kernel is still 7.1, and the Bluetooth firmware everywhere.
+- **Bluetooth, everywhere.** `linux-firmware` still doesn't ship `BT_RAM_CODE_MT6639_2_1_hdr.bin`, so no official image can bring up the chip. These images add the firmware.
+- **WiFi on Bazzite's NVIDIA LTS (proprietary) variants.** They run a 6.18 LTS kernel with no in-tree MT7927 driver. These images add the out-of-tree driver there; on 7.2+ kernels the in-tree driver is left untouched.
 
 For driver-level detail, see the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status).
 
 ## Is this still maintained?
-**Yes — the images update daily, even when this repo shows no recent commits.** This repo is just packaging: it takes the upstream Bazzite/Bluefin images and adds the out-of-tree MT7927 driver. Commits are rare because there's little to change here — mostly dependency bumps and [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) submodule updates when new releases come.
+**Yes — the images rebuild daily, even when this repo shows no recent commits.** This repo is just packaging, so there's little to change here — mostly dependency bumps and submodule updates. You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`).
 
-You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`) and rebuild daily. These images will keep updating until the official images cover MT7927 on their own. That needs `linux-firmware` to ship the Bluetooth blob, not just the kernel drivers that have already landed. When it happens, you'll be given time to switch over.
-
-## What this is
-
-The kernel module patches come from [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) (included as a git submodule). This repo packages them into Bazzite and Bluefin OCI images for multiple variants.
+These images will keep updating until the official images cover MT7927 on their own — see Status above for what's still missing. When that happens, you'll be given time to switch over.
 
 ## Available images
 
@@ -36,7 +27,7 @@ All images are published to `ghcr.io/samutoljamo/`.
 
 ### Bazzite
 
-Available with `stable` and `testing` tags.
+Available with `stable` and `testing` tags (Dev images: `stable` only).
 
 #### Desktop
 
@@ -49,8 +40,6 @@ Available with `stable` and `testing` tags.
 | `bazzite-gnome-nvidia-open-mt7927` | bazzite-gnome-nvidia-open | GNOME | NVIDIA (open) |
 
 #### Dev
-
-Only `stable` tag is published upstream for these.
 
 | Image | Base | Desktop | GPU |
 |---|---|---|---|
@@ -74,91 +63,45 @@ Available with `stable` and `gts` tags.
 | Image | Base | Desktop | GPU |
 |---|---|---|---|
 | `bluefin-mt7927` | bluefin | GNOME | AMD/Intel |
-| `bluefin-nvidia-mt7927` | bluefin-nvidia | GNOME | NVIDIA (proprietary) |
 | `bluefin-nvidia-open-mt7927` | bluefin-nvidia-open | GNOME | NVIDIA (open) |
 | `bluefin-dx-mt7927` | bluefin-dx | GNOME + Dev | AMD/Intel |
-| `bluefin-dx-nvidia-mt7927` | bluefin-dx-nvidia | GNOME + Dev | NVIDIA (proprietary) |
 | `bluefin-dx-nvidia-open-mt7927` | bluefin-dx-nvidia-open | GNOME + Dev | NVIDIA (open) |
+
+The proprietary `bluefin-nvidia` and `bluefin-dx-nvidia` variants were dropped in April 2026 because upstream froze them on kernel 6.16. If you switched to `bluefin-nvidia-mt7927` or `bluefin-dx-nvidia-mt7927` before then, your image no longer receives updates — switch to the corresponding `-nvidia-open` variant (requires a Turing or newer NVIDIA GPU).
 
 ## Installation
 
-Pick the image that matches your hardware and desktop preference.
-
-### Bazzite
+Pick an image from the tables above, then switch to it. For example:
 
 ```bash
-# Desktop - KDE + AMD/Intel GPU
+# Bazzite - KDE + AMD/Intel GPU
 sudo bootc switch ghcr.io/samutoljamo/bazzite-mt7927:stable
 
-# Desktop - KDE + NVIDIA (open drivers)
-sudo bootc switch ghcr.io/samutoljamo/bazzite-nvidia-open-mt7927:stable
-
-# Desktop - KDE + NVIDIA (proprietary drivers)
-sudo bootc switch ghcr.io/samutoljamo/bazzite-nvidia-mt7927:stable
-
-# Desktop - GNOME + AMD/Intel GPU
-sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-mt7927:stable
-
-# Desktop - GNOME + NVIDIA (open drivers)
-sudo bootc switch ghcr.io/samutoljamo/bazzite-gnome-nvidia-open-mt7927:stable
-
-# Dev - KDE + AMD/Intel
-sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-mt7927:stable
-
-# Dev - KDE + NVIDIA (proprietary drivers)
-sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-nvidia-mt7927:stable
-
-# Dev - GNOME + AMD/Intel
-sudo bootc switch ghcr.io/samutoljamo/bazzite-dx-gnome-mt7927:stable
-
-# Deck - KDE + AMD/Intel
-sudo bootc switch ghcr.io/samutoljamo/bazzite-deck-mt7927:stable
-
-# Deck - GNOME + AMD/Intel
-sudo bootc switch ghcr.io/samutoljamo/bazzite-deck-gnome-mt7927:stable
-
-# Deck - KDE + NVIDIA
-sudo bootc switch ghcr.io/samutoljamo/bazzite-deck-nvidia-mt7927:stable
-
-# Deck - GNOME + NVIDIA
-sudo bootc switch ghcr.io/samutoljamo/bazzite-deck-nvidia-gnome-mt7927:stable
-```
-
-Replace `:stable` with `:testing` if you want the testing channel.
-
-### Bluefin
-
-```bash
-# GNOME + AMD/Intel GPU
+# Bluefin - GNOME + AMD/Intel GPU
 sudo bootc switch ghcr.io/samutoljamo/bluefin-mt7927:stable
-
-# GNOME + NVIDIA (proprietary drivers)
-sudo bootc switch ghcr.io/samutoljamo/bluefin-nvidia-mt7927:stable
-
-# GNOME + NVIDIA (open drivers)
-sudo bootc switch ghcr.io/samutoljamo/bluefin-nvidia-open-mt7927:stable
-
-# GNOME + Dev + AMD/Intel GPU
-sudo bootc switch ghcr.io/samutoljamo/bluefin-dx-mt7927:stable
-
-# GNOME + Dev + NVIDIA (proprietary drivers)
-sudo bootc switch ghcr.io/samutoljamo/bluefin-dx-nvidia-mt7927:stable
-
-# GNOME + Dev + NVIDIA (open drivers)
-sudo bootc switch ghcr.io/samutoljamo/bluefin-dx-nvidia-open-mt7927:stable
 ```
 
-Replace `:stable` with `:gts` for the GTS channel.
+Swap in any image name from the tables. Use `:testing` instead of `:stable` for the Bazzite testing channel (not available for Dev images), or `:gts` for Bluefin GTS.
 
 Reboot after switching.
+
+## Verifying images
+
+All images are signed with cosign. Verify with the [public key](cosign.pub) in this repo:
+
+```bash
+cosign verify --key https://raw.githubusercontent.com/samutoljamo/bazzite-mt7927/main/cosign.pub \
+  ghcr.io/samutoljamo/bazzite-mt7927:stable
+```
 
 ## Building / Testing locally
 
 ```bash
-# Build the default variant (bazzite-nvidia-open)
+# Build the default: bazzite-mt7927:latest from the bazzite-nvidia-open:stable base
+# (not the same as the published bazzite-mt7927, which uses the plain bazzite base)
 just build
 
-# Build a specific variant
+# Build a specific variant: just build <image-name> <tag> <base-image>
 just build bazzite-gnome-mt7927 latest ghcr.io/ublue-os/bazzite-gnome:stable
 
 # Test the built image
