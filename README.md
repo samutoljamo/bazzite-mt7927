@@ -1,34 +1,25 @@
 # bazzite-mt7927 / bluefin-mt7927
-Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support. Updated daily.
+Bazzite and Bluefin OCI images with MT7927 WiFi and Bluetooth support, rebuilt daily.
+
+The kernel module patches come from [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) (included as a git submodule). This repo packages them, plus the Bluetooth firmware, into the upstream Bazzite and Bluefin images for multiple variants.
 
 ## Status
 
 WiFi and Bluetooth work in these images on every published channel (`stable`, `testing`, `gts`).
 
-Mainline caught up in two stages: the Bluetooth driver (`btmtk`) landed in kernel 7.1, the WiFi driver (`mt7925e`) in 7.2. Firmware did not follow: `linux-firmware` ships the MT7927 WiFi blobs, but no Bluetooth blob.
+Upstream has mostly caught up: the Bluetooth driver (`btmtk`) landed in kernel 7.1, the WiFi driver (`mt7925e`) in 7.2, and `linux-firmware` ships the MT7927 WiFi blobs. Official images on a 7.2+ kernel — currently all main Bazzite and Bluefin variants — have working MT7927 WiFi out of the box.
 
-What that means for the **official** images (kernel versions as of 2026-08-20):
+What still doesn't work in the **official** images (as of 2026-11-09):
 
-| Official image | Kernel | WiFi | Bluetooth |
-|---|---|---|---|
-| `bazzite:testing` | 7.2.0 | works, in-tree driver | no firmware |
-| `bazzite:stable` | 7.1.5 | no driver | no firmware |
-| `bluefin:stable`, `bluefin:gts` | 7.1.4 | no driver | no firmware |
-
-Bluetooth works on no official image until `linux-firmware` ships `BT_RAM_CODE_MT6639_2_1_hdr.bin`.
-
-These images fill both gaps: the out-of-tree WiFi driver wherever the kernel is still 7.1, and the Bluetooth firmware everywhere.
+- **Bluetooth, everywhere.** `linux-firmware` still doesn't ship `BT_RAM_CODE_MT6639_2_1_hdr.bin`, so no official image can bring up the chip. These images add the firmware.
+- **WiFi on Bazzite's NVIDIA LTS (proprietary) variants.** They run a 6.18 LTS kernel with no in-tree MT7927 driver. These images add the out-of-tree driver there; on 7.2+ kernels the in-tree driver is left untouched.
 
 For driver-level detail, see the [upstream driver status](https://github.com/jetm/mediatek-mt7927-dkms#status).
 
 ## Is this still maintained?
-**Yes — the images rebuild daily, even when this repo shows no recent commits.** This repo is just packaging: it takes the upstream Bazzite/Bluefin images and adds the out-of-tree MT7927 driver and Bluetooth firmware, so there's little to change here — mostly dependency bumps and [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) submodule updates. You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`).
+**Yes — the images rebuild daily, even when this repo shows no recent commits.** This repo is just packaging, so there's little to change here — mostly dependency bumps and submodule updates. You can verify freshness yourself: image tags are dated (`stable.YYYYMMDD`).
 
-These images will keep updating until the official images cover MT7927 on their own. That needs `linux-firmware` to ship the Bluetooth blob, not just the kernel drivers that have already landed. When it happens, you'll be given time to switch over.
-
-## What this is
-
-The kernel module patches come from [jetm/mediatek-mt7927-dkms](https://github.com/jetm/mediatek-mt7927-dkms) (included as a git submodule). This repo packages them into Bazzite and Bluefin OCI images for multiple variants.
+These images will keep updating until the official images cover MT7927 on their own — see Status above for what's still missing. When that happens, you'll be given time to switch over.
 
 ## Available images
 
